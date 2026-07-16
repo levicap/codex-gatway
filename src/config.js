@@ -58,14 +58,14 @@ export const config = {
     visibleTerminalHold: booleanEnv("CODEX_VISIBLE_TERMINAL_HOLD", true),
     enableApolloMcp: booleanEnv("CODEX_ENABLE_APOLLO_MCP", true),
     apolloMcpRequired: booleanEnv("CODEX_APOLLO_MCP_REQUIRED", true),
-    timeoutMs: numberEnv("CODEX_TIMEOUT_MS", 300000),
+    timeoutMs: numberEnv("CODEX_TIMEOUT_MS", 900000),
     workdir: resolveFromRoot(stringEnv("CODEX_WORKDIR"), "codex-workdir"),
     outputSchemaPath: path.resolve(projectRoot, "schemas", "company-research.schema.json")
   },
 
   jobs: {
     runsDir: path.resolve(projectRoot, "job-runs"),
-    maxConcurrent: Math.max(1, numberEnv("MAX_CONCURRENT_JOBS", 1)),
+    maxConcurrent: Math.max(1, numberEnv("MAX_CONCURRENT_JOBS", 2)),
     retentionMs: Math.max(60000, numberEnv("JOB_RETENTION_MS", 86400000))
   }
 };

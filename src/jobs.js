@@ -22,17 +22,30 @@ export function createJobStore(config) {
   let active = 0;
 
   function snapshot(job) {
+    const queueIndex = queue.findIndex((queuedJob) => queuedJob.id === job.id);
+    const queuePosition = queueIndex >= 0 ? queueIndex + 1 : null;
+    const codexLogUrl = job.codex || job.jobDir ? `/jobs/${job.id}/codex-log` : null;
+    const statusMessage =
+      job.status === "queued"
+        ? `Waiting for a worker slot. Queue position: ${queuePosition || "unknown"}. Codex logs will appear after the job starts.`
+        : job.status === "running"
+          ? "Codex/Apollo enrichment is running."
+          : null;
+
     return {
       id: job.id,
       status: job.status,
+      statusMessage,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       completedAt: job.completedAt || null,
+      queuePosition,
       input: job.input,
       result: job.result || null,
       error: job.error || null,
       jobDir: job.jobDir || null,
       codex: job.codex || null,
+      codexLogUrl,
       callback: job.callback || null
     };
   }
@@ -44,8 +57,8 @@ export function createJobStore(config) {
 
   async function runJob(job) {
     const jobDir = path.join(config.jobs.runsDir, job.id);
-    await mkdir(jobDir, { recursive: true });
     save(job, { status: "running", jobDir });
+    await mkdir(jobDir, { recursive: true });
 
     try {
       let codex = null;
@@ -220,6 +233,21 @@ export function createJobStore(config) {
     return job ? snapshot(job) : null;
   }
 
+  function list() {
+    return [...jobs.values()]
+      .map((job) => snapshot(job))
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  }
+
+  function stats() {
+    return {
+      active,
+      queued: queue.length,
+      maxConcurrent: config.jobs.maxConcurrent,
+      total: jobs.size
+    };
+  }
+
   function purgeOldJobs() {
     const cutoff = Date.now() - config.jobs.retentionMs;
     for (const [id, job] of jobs.entries()) {
@@ -230,6 +258,8 @@ export function createJobStore(config) {
   return {
     create,
     get,
+    list,
+    stats,
     purgeOldJobs
   };
 }

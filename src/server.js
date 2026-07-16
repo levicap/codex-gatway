@@ -70,7 +70,17 @@ app.post("/webhooks/executive-enrichment", requireWebhookAuth, (req, res) => {
   res.status(202).json({
     jobId: job.id,
     status: job.status,
-    statusUrl: `/jobs/${job.id}`
+    statusUrl: `/jobs/${job.id}`,
+    statusMessage: job.statusMessage,
+    queuePosition: job.queuePosition,
+    codexLogUrl: job.codexLogUrl
+  });
+});
+
+app.get("/jobs", requireWebhookAuth, (_req, res) => {
+  res.json({
+    stats: jobs.stats(),
+    jobs: jobs.list()
   });
 });
 

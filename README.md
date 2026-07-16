@@ -67,6 +67,14 @@ Poll status until `status` is `completed` or `failed`:
 curl.exe -s "http://localhost:3000/jobs/6df1094a-7f58-4502-a8ec-2ed8f8c3b13a"
 ```
 
+List all in-memory jobs and see what is currently running or queued:
+
+```bash
+curl.exe -s "http://localhost:3000/jobs"
+```
+
+If a job is still `queued`, it will not have Codex logs yet. The job response includes `queuePosition`, `statusMessage`, and `codexLogUrl` once logs are available.
+
 For a callback-based job, include `callbackUrl` in the POST body:
 
 ```json
@@ -143,3 +151,4 @@ The signature is HMAC-SHA256 over `<timestamp>.<json-body>`.
 - Apollo is exposed to Codex as MCP tools: `apollo_people_search` and `apollo_people_enrich`. The server still runs Apollo after Codex as a fallback/merge step.
 - Apollo defaults to `https://api.apollo.io/api/v1/mixed_people/api_search` for search and `/people/match` for enrichment. Override `APOLLO_BASE_URL`, `APOLLO_PEOPLE_SEARCH_PATH`, or `APOLLO_PEOPLE_ENRICHMENT_PATH` if your Apollo account uses different endpoints.
 - Codex searches public web sources for executive business emails first. Apollo fills missing emails when enrichment returns one. Set `APOLLO_INCLUDE_EMAILS=true` only if your workflow is allowed to reveal/process Apollo personal emails.
+- `MAX_CONCURRENT_JOBS=2` by default. Increase it if you want multiple Codex jobs running at the same time; each visible job can open its own terminal window.
