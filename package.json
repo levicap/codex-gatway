@@ -1,0 +1,19 @@
+{
+  "name": "codex-executive-webhook",
+  "version": "1.0.0",
+  "description": "Express webhook that runs Codex CLI research and Apollo enrichment for company executives.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
