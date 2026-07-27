@@ -96,6 +96,7 @@ test("merges public and apollo executives by name and ranks senior titles first"
         title: "CEO",
         email: "jane@example.com",
         emailType: "public_work",
+        linkedinUrl: "https://linkedin.com/in/jane-public",
         emailSourceUrls: ["https://example.com/contact"],
         confidence: 0.7,
         sourceUrls: ["https://example.com/team"]
@@ -148,6 +149,7 @@ test("merges public and apollo executives by name and ranks senior titles first"
   assert.equal(merged[0].name, "Jane Doe");
   assert.equal(merged[0].source, "apollo+codex_public");
   assert.equal(merged[0].title, "Chief Executive Officer");
+  assert.equal(merged[0].linkedinUrl, "https://linkedin.com/in/jane-public");
   assert.equal(merged[0].email, "jane@example.com");
   assert.equal(merged[0].emailSource, "codex_public");
   assert.equal(merged[1].email, "alex@apollo.example");

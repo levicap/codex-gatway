@@ -44,13 +44,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["name", "title", "email", "emailType", "emailSource", "emailSourceUrls", "sourceUrls", "confidence"],
+        "required": ["name", "title", "linkedinUrl", "email", "emailType", "emailSource", "emailSourceUrls", "sourceUrls", "confidence"],
         "properties": {
           "name": {
             "type": "string"
           },
           "title": {
             "type": "string"
+          },
+          "linkedinUrl": {
+            "type": "string",
+            "description": "The executive's LinkedIn profile URL, or an empty string if not verified."
           },
           "email": {
             "type": "string",

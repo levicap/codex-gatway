@@ -4,6 +4,30 @@ function firstNonEmpty(...values) {
   return values.find((value) => typeof value === "string" && value.trim())?.trim() || "";
 }
 
+function normalizeComparable(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function emailDomain(email) {
+  const value = firstNonEmpty(email).toLowerCase();
+  const at = value.lastIndexOf("@");
+  return at >= 0 ? cleanDomain(value.slice(at + 1)) : "";
+}
+
+function sameOrganization(apolloPerson, { companyName, domain }) {
+  const expectedCompany = normalizeComparable(companyName);
+  const actualCompany = normalizeComparable(apolloPerson.organizationName);
+  if (expectedCompany && actualCompany && (actualCompany.includes(expectedCompany) || expectedCompany.includes(actualCompany))) {
+    return true;
+  }
+
+  const expectedDomain = cleanDomain(domain);
+  return Boolean(expectedDomain && emailDomain(apolloPerson.email) === expectedDomain);
+}
+
 export function normalizeApolloPerson(person, includeEmails) {
   const firstName = firstNonEmpty(person.first_name, person.firstName);
   const lastName = firstNonEmpty(person.last_name, person.lastName);
@@ -217,4 +241,68 @@ export async function searchApolloExecutives({ companyName, domain, limit }, con
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function supplementExecutivesWithApollo(executives, { companyName, domain }, config) {
+  if (!config.apollo.apiKey || !config.apollo.enrichPeople) {
+    return {
+      executives,
+      supplementedCount: 0,
+      warnings: []
+    };
+  }
+
+  const warnings = [];
+  let supplementedCount = 0;
+  const supplemented = [];
+
+  for (const executive of executives) {
+    if (executive.linkedinUrl && executive.email) {
+      supplemented.push(executive);
+      continue;
+    }
+
+    try {
+      const enriched = await enrichApolloPerson(executive, { domain, companyName }, config);
+      if (!sameOrganization(enriched, { companyName, domain })) {
+        warnings.push(`${executive.name}: Apollo match skipped because organization/domain did not match.`);
+        supplemented.push(executive);
+        continue;
+      }
+
+      const next = {
+        ...executive,
+        personId: executive.personId || enriched.personId,
+        firstName: executive.firstName || enriched.firstName,
+        lastName: executive.lastName || enriched.lastName,
+        organizationName: executive.organizationName || enriched.organizationName,
+        linkedinUrl: executive.linkedinUrl || enriched.linkedinUrl,
+        city: executive.city || enriched.city,
+        state: executive.state || enriched.state,
+        country: executive.country || enriched.country,
+        seniority: executive.seniority || enriched.seniority,
+        departments: Array.isArray(executive.departments) && executive.departments.length ? executive.departments : enriched.departments,
+        email: executive.email || enriched.email,
+        emailType: executive.emailType || enriched.emailType,
+        emailStatus: executive.emailStatus || enriched.emailStatus,
+        emailSource: executive.email ? executive.emailSource : enriched.email ? "apollo" : executive.emailSource,
+        source: String(executive.source || "").includes("apollo") ? executive.source : "apollo+codex_public",
+        confidence: Math.max(Number(executive.confidence || 0), Number(enriched.confidence || 0.85))
+      };
+
+      if ((next.linkedinUrl && !executive.linkedinUrl) || (next.email && !executive.email)) {
+        supplementedCount += 1;
+      }
+      supplemented.push(next);
+    } catch (error) {
+      warnings.push(`${executive.name}: ${error.message}`);
+      supplemented.push(executive);
+    }
+  }
+
+  return {
+    executives: supplemented,
+    supplementedCount,
+    warnings
+  };
 }

@@ -3,7 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { domainFromWebsite, mergeExecutives, pickCompanyWebsite, cleanDomain } from "./company.js";
 import { readCodexResearchOutput, runCodexResearch } from "./codexAgent.js";
-import { searchApolloExecutives } from "./apolloClient.js";
+import { searchApolloExecutives, supplementExecutivesWithApollo } from "./apolloClient.js";
 import { postCallback } from "./callback.js";
 
 async function deliverCallback(job, payload, config) {
@@ -116,11 +116,20 @@ export function createJobStore(config) {
         config
       );
 
-      const keyExecutives = mergeExecutives({
+      let keyExecutives = mergeExecutives({
         apolloExecutives: apollo.executives,
         publicExecutives: research.publicExecutives,
         limit: job.input.limit
       });
+      const apolloSupplement = await supplementExecutivesWithApollo(
+        keyExecutives,
+        {
+          companyName: research.companyName || job.input.companyName,
+          domain
+        },
+        config
+      );
+      keyExecutives = apolloSupplement.executives;
 
       const payload = {
         jobId: job.id,
@@ -157,6 +166,8 @@ export function createJobStore(config) {
             enrichmentEndpoint: apollo.enrichmentEndpoint || null,
             enrichedCount: apollo.enrichedCount || 0,
             warnings: apollo.warnings || [],
+            supplementedCount: apolloSupplement.supplementedCount,
+            supplementWarnings: apolloSupplement.warnings,
             error: apollo.error || null
           }
         },
