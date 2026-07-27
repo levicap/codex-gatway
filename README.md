@@ -85,6 +85,7 @@ Equivalent JSON body:
 ```
 
 `companyWebsite` is optional. If missing, Codex is asked to find the official website through web research.
+`metadata` is passed to Codex as untrusted caller context and is also returned unchanged in the final result.
 
 Response:
 
