@@ -83,6 +83,24 @@ export function normalizeExecutiveName(name) {
     .toLowerCase();
 }
 
+function hasFullName(name) {
+  return String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length >= 2;
+}
+
+function executiveScore(executive) {
+  const source = String(executive.source || "");
+  const email = cleanEmail(executive.email);
+  const sourceBonus = source.includes("codex_public") ? 25 : 0;
+  const emailBonus = email ? 125 : 0;
+  const linkedinBonus = cleanString(executive.linkedinUrl) ? 3 : 0;
+  const nameBonus = hasFullName(executive.name) ? 2 : 0;
+  const apolloOnlyNoEmailPenalty = !source.includes("codex_public") && !email ? -150 : 0;
+  return executiveRank(executive.title) * 100 + sourceBonus + emailBonus + linkedinBonus + nameBonus + apolloOnlyNoEmailPenalty;
+}
+
 function cleanEmail(value) {
   const email = String(value || "").trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "";
@@ -121,6 +139,7 @@ export function mergeExecutives({ apolloExecutives = [], publicExecutives = [], 
     const name = String(executive.name || "").trim();
     const title = String(executive.title || "").trim();
     if (!name || !title) continue;
+    if (!hasFullName(name) && !cleanEmail(executive.email) && !cleanString(executive.linkedinUrl)) continue;
 
     const key = normalizeExecutiveName(name);
     const current = merged.get(key);
@@ -153,6 +172,6 @@ export function mergeExecutives({ apolloExecutives = [], publicExecutives = [], 
   }
 
   return [...merged.values()]
-    .sort((a, b) => executiveRank(b.title) - executiveRank(a.title) || a.name.localeCompare(b.name))
+    .sort((a, b) => executiveScore(b) - executiveScore(a) || a.name.localeCompare(b.name))
     .slice(0, limit);
 }

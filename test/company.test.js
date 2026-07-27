@@ -125,11 +125,26 @@ test("merges public and apollo executives by name and ranks senior titles first"
         email: "alex@apollo.example",
         emailType: "apollo_work",
         confidence: 0.85
+      },
+      {
+        name: "Felix Rattner",
+        title: "Founder, CTO",
+        email: "",
+        emailType: "",
+        linkedinUrl: "https://linkedin.com/in/felix",
+        confidence: 0.85
+      },
+      {
+        name: "Chuck",
+        title: "Vice President",
+        email: "",
+        emailType: "",
+        confidence: 0.85
       }
     ]
   });
 
-  assert.equal(merged.length, 3);
+  assert.equal(merged.length, 4);
   assert.equal(merged[0].name, "Jane Doe");
   assert.equal(merged[0].source, "apollo+codex_public");
   assert.equal(merged[0].title, "Chief Executive Officer");
@@ -137,4 +152,6 @@ test("merges public and apollo executives by name and ranks senior titles first"
   assert.equal(merged[0].emailSource, "codex_public");
   assert.equal(merged[1].email, "alex@apollo.example");
   assert.equal(merged[1].emailSource, "apollo");
+  assert.equal(merged[2].name, "Felix Rattner");
+  assert.equal(merged.some((executive) => executive.name === "Chuck"), false);
 });
