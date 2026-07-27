@@ -23,6 +23,40 @@ Configure `.env`:
 
 Codex authentication is handled by the CLI. Either run `codex login` on the host or provide `CODEX_API_KEY` or `CODEX_ACCESS_TOKEN` in the server environment for trusted automation.
 
+## VPS / Systemd
+
+On a Linux VPS, deploy the repo into `/opt/codex-gatway`, create `/opt/codex-gatway/.env`, then run the app with systemd:
+
+```bash
+sudo systemctl status codex-gatway
+sudo journalctl -u codex-gatway -f
+curl http://SERVER_IP:3000/health
+```
+
+The production `.env` should set `CODEX_VISIBLE_TERMINAL=false` because a VPS systemd service is headless. Keep `WEBHOOK_AUTH_TOKEN` set when the service is exposed publicly, then call protected endpoints with `Authorization: Bearer <token>`.
+
+Authorize Codex as the same Linux user that runs the service. If the systemd service runs as root:
+
+```bash
+sudo -i
+codex login --device-auth
+codex login status
+systemctl restart codex-gatway
+```
+
+For API-key auth instead:
+
+```bash
+sudo -i
+export OPENAI_API_KEY="sk-..."
+printenv OPENAI_API_KEY | codex login --with-api-key
+unset OPENAI_API_KEY
+codex login status
+systemctl restart codex-gatway
+```
+
+API-key auth is usually the practical choice for headless/programmatic Codex CLI workflows. It is billed through the OpenAI Platform account.
+
 ## Endpoint
 
 `POST /webhooks/executive-enrichment`
