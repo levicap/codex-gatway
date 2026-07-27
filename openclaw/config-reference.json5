@@ -1,0 +1,141 @@
+// Reference shape for the dedicated agent. Do not apply this file blindly:
+// patching agents.list replaces the complete agent array.
+{
+  gateway: {
+    mode: "local",
+    bind: "loopback",
+  },
+  tools: {
+    web: {
+      search: {
+        enabled: true,
+        openaiCodex: {
+          enabled: true,
+          mode: "live",
+          contextSize: "high",
+        },
+      },
+      fetch: {
+        enabled: true,
+      },
+    },
+  },
+  plugins: {
+    entries: {
+      codex: {
+        enabled: true,
+        config: {
+          codexDynamicToolsLoading: "searchable",
+          codexDynamicToolsExclude: [
+            "exec",
+            "process",
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "message",
+            "cron",
+            "sessions_spawn",
+            "subagents",
+            "gateway",
+            "nodes",
+          ],
+          appServer: {
+            homeScope: "user",
+            approvalPolicy: "never",
+            sandbox: "read-only",
+            approvalsReviewer: "auto_review",
+            experimental: {
+              sandboxExecServer: true,
+            },
+          },
+        },
+      },
+    },
+  },
+  agents: {
+    list: [
+      {
+        id: "lead-research",
+        workspace: "/absolute/path/to/openclaw/workspace-lead-research",
+        model: "openai/gpt-5.6-terra",
+        thinkingDefault: "medium",
+        skills: [],
+        memorySearch: {
+          enabled: false,
+        },
+        subagents: {
+          allowAgents: [],
+          requireAgentId: true,
+        },
+        sandbox: {
+          mode: "all",
+          backend: "docker",
+          workspaceAccess: "none",
+          scope: "session",
+          browser: {
+            enabled: true,
+            headless: true,
+            allowHostControl: false,
+            autoStart: true,
+          },
+        },
+        tools: {
+          profile: "minimal",
+          alsoAllow: ["web_search", "web_fetch", "browser"],
+          deny: [
+            "exec",
+            "process",
+            "read",
+            "write",
+            "edit",
+            "apply_patch",
+            "message",
+            "cron",
+            "sessions_spawn",
+            "sessions_list",
+            "sessions_history",
+            "sessions_send",
+            "sessions_yield",
+            "subagents",
+            "gateway",
+            "nodes",
+          ],
+          elevated: {
+            enabled: false,
+          },
+          sandbox: {
+            tools: {
+              // The experimental sandbox exec-server needs the native surface
+              // in this second layer so native hosted search can run. The
+              // agent-level deny list above still blocks these six tools.
+              alsoAllow: [
+                "exec",
+                "process",
+                "read",
+                "write",
+                "edit",
+                "apply_patch",
+                "web_search",
+                "web_fetch",
+                "browser",
+              ],
+              deny: [
+                "message",
+                "cron",
+                "sessions_spawn",
+                "sessions_list",
+                "sessions_history",
+                "sessions_send",
+                "sessions_yield",
+                "subagents",
+                "gateway",
+                "nodes",
+              ],
+            },
+          },
+        },
+      },
+    ],
+  },
+}
