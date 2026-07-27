@@ -1,0 +1,21 @@
+[Unit]
+Description=OpenClaw decision-maker research webhook
+After=network-online.target openclaw-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/moez/Documents/leads-search/codex-gatway
+EnvironmentFile=/home/moez/Documents/leads-search/codex-gatway/.env
+Environment=OPENCLAW_BIN=/home/moez/.nvm/versions/node/v24.18.0/bin/openclaw
+Environment=PATH=/home/moez/.nvm/versions/node/v24.18.0/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/moez/.nvm/versions/node/v24.18.0/bin/node /home/moez/Documents/leads-search/codex-gatway/src/server.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/moez/Documents/leads-search/codex-gatway/data /home/moez/Documents/leads-search/codex-gatway/job-runs /home/moez/Documents/leads-search/codex-gatway/codex-workdir
+
+[Install]
+WantedBy=default.target

@@ -1,19 +1,21 @@
 {
-  "name": "codex-executive-webhook",
-  "version": "1.0.0",
-  "description": "Express webhook that runs Codex CLI research and Apollo enrichment for company executives.",
+  "name": "openclaw-decision-maker-webhook",
+  "version": "2.0.0",
+  "description": "Typed webhook that queues OpenClaw research for verified decision-maker LinkedIn profiles.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "evaluate": "node scripts/evaluate.js"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
     "dotenv": "^16.4.7",
     "express": "^4.21.2"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   }
 }

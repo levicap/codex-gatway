@@ -1,4 +1,5 @@
 import { normalizeWebsite } from "./company.js";
+import { validateCallbackTargetInput } from "./callback.js";
 
 function firstString(body, names) {
   for (const name of names) {
@@ -12,94 +13,97 @@ function isPlainObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function parseJsonIfPossible(value) {
-  if (typeof value !== "string") return value;
-  const trimmed = value.trim();
-  if (!trimmed) return value;
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return value;
-
+function normalizeHttpUrl(value) {
+  if (!value) return "";
   try {
-    return JSON.parse(trimmed);
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "";
+    return url.toString();
   } catch {
-    return value;
+    return "";
   }
 }
 
-function normalizeBody(body) {
-  const parsed = parseJsonIfPossible(body);
-  if (isPlainObject(parsed)) {
-    for (const key of ["data", "body", "raw", "payload"]) {
-      const nested = parseJsonIfPossible(parsed[key]);
-      if (isPlainObject(nested)) return nested;
-    }
-
-    const keys = Object.keys(parsed);
-    if (keys.length === 1) {
-      const onlyKey = parseJsonIfPossible(keys[0]);
-      if (isPlainObject(onlyKey)) return onlyKey;
-    }
-
-    return parsed;
-  }
-
-  return parsed;
+function checkLength(errors, label, value, maximum) {
+  if (value.length > maximum) errors.push(`${label} must be at most ${maximum.toLocaleString("en-US")} characters.`);
 }
 
-export function validateEnrichmentRequest(body) {
-  body = normalizeBody(body);
+export function validateResearchRequest(body, options = {}) {
   const errors = [];
   if (!isPlainObject(body)) {
     return { ok: false, errors: ["Request body must be a JSON object."] };
   }
 
-  const clientName = firstString(body, ["clientName", "client_name", "client"]);
   const companyName = firstString(body, ["companyName", "company_name", "company"]);
-  const callbackUrl = firstString(body, ["callbackUrl", "callback_url", "callback"]);
-  const rawWebsite = firstString(body, ["companyWebsite", "company_website", "website", "domain"]);
-  const companyWebsite = rawWebsite ? normalizeWebsite(rawWebsite) : "";
+  const personName = firstString(body, ["personName", "person_name", "clientName", "client_name", "client"]);
+  const location = firstString(body, ["location"]);
+  const jobTitle = firstString(body, ["jobTitle", "job_title"]);
+  const jobDescription = firstString(body, ["jobDescription", "job_description", "description"]);
+  const jobUrlRaw = firstString(body, ["jobUrl", "job_url"]);
+  const callbackUrlRaw = firstString(body, ["callbackUrl", "callback_url", "callback"]);
+  const websiteRaw = firstString(body, ["companyWebsite", "company_website", "website", "domain"]);
+  const companyWebsite = websiteRaw ? normalizeWebsite(websiteRaw) : "";
+  const jobUrl = jobUrlRaw ? normalizeHttpUrl(jobUrlRaw) : "";
 
-  if (!companyName) errors.push("companyName is required.");
-
-  let parsedCallbackUrl = null;
-  if (callbackUrl) {
-    try {
-      parsedCallbackUrl = new URL(callbackUrl);
-      if (!["http:", "https:"].includes(parsedCallbackUrl.protocol)) {
-        errors.push("callbackUrl must use http or https.");
-      }
-    } catch {
-      errors.push("callbackUrl must be a valid URL.");
-    }
+  if (!companyName && !companyWebsite && !personName) {
+    errors.push("At least one of companyName, companyWebsite, or personName is required.");
   }
+  if (websiteRaw && !companyWebsite) errors.push("companyWebsite must be a valid HTTP(S) URL or domain.");
+  if (jobUrlRaw && !jobUrl) errors.push("jobUrl must be a valid HTTP(S) URL.");
 
-  if (rawWebsite && !companyWebsite) {
-    errors.push("companyWebsite must be a valid URL or domain.");
-  }
+  checkLength(errors, "companyName", companyName, 500);
+  checkLength(errors, "personName", personName, 500);
+  checkLength(errors, "location", location, 500);
+  checkLength(errors, "jobTitle", jobTitle, 1000);
+  checkLength(errors, "jobDescription", jobDescription, 20000);
+  checkLength(errors, "jobUrl", jobUrlRaw, 4096);
 
-  const rawLimit = body.limit ?? body.executiveLimit ?? body.executive_limit ?? 10;
-  const limit = Number(rawLimit);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 25) {
-    errors.push("limit must be an integer between 1 and 25.");
-  }
-
-  const metadata = isPlainObject(body.metadata) ? body.metadata : {};
-  if (body.metadata !== undefined && !isPlainObject(body.metadata)) {
+  const metadata = body.metadata === undefined ? {} : body.metadata;
+  if (!isPlainObject(metadata)) {
     errors.push("metadata must be an object when provided.");
+  } else if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > 16 * 1024) {
+    errors.push("metadata must be at most 16 KB.");
   }
 
-  if (errors.length) {
-    return { ok: false, errors };
+  let callbackUrl = "";
+  if (callbackUrlRaw) {
+    if (options.callbackSecretConfigured === false) {
+      errors.push("Callbacks are disabled until CALLBACK_SECRET is configured.");
+    }
+    const callbackCheck = validateCallbackTargetInput(callbackUrlRaw, options.callbackAllowedHosts || []);
+    if (!callbackCheck.ok) errors.push(callbackCheck.error);
+    else callbackUrl = callbackCheck.url;
   }
+
+  if (errors.length) return { ok: false, errors };
 
   return {
     ok: true,
     value: {
-      clientName,
       companyName,
       companyWebsite,
-      callbackUrl: parsedCallbackUrl ? parsedCallbackUrl.toString() : "",
-      limit,
+      personName,
+      location,
+      jobTitle,
+      jobDescription,
+      jobUrl,
+      callbackUrl,
       metadata
     }
   };
+}
+
+// Temporary source compatibility for code that imported the old name.
+export const validateEnrichmentRequest = validateResearchRequest;
+
+export function validateIdempotencyKey(value) {
+  if (value === undefined || value === null || value === "") return { ok: true, value: "" };
+  const key = String(value).trim();
+  if (!/^[A-Za-z0-9._:-]{1,200}$/.test(key)) {
+    return {
+      ok: false,
+      error: "Idempotency-Key must be 1-200 characters using letters, numbers, dot, underscore, colon, or hyphen."
+    };
+  }
+  return { ok: true, value: key };
 }

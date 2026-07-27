@@ -1,211 +1,120 @@
-import { mkdir } from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
-import { domainFromWebsite, mergeExecutives, pickCompanyWebsite, cleanDomain } from "./company.js";
-import { readCodexResearchOutput, runCodexResearch } from "./codexAgent.js";
-import { searchApolloExecutives } from "./apolloClient.js";
+import { mkdir, rm } from "node:fs/promises";
+import { SqliteJobStore } from "./jobStore.js";
+import { runOpenClawResearch } from "./openclawAgent.js";
+import { runCodexResearch } from "./codexAgent.js";
 import { postCallback } from "./callback.js";
+import { buildTerminalResult } from "./researchResult.js";
 
-async function deliverCallback(job, payload, config) {
-  if (!job.input.callbackUrl) {
-    return {
-      status: "skipped_no_callback_url"
-    };
-  }
+export function createJobStore(config, dependencies = {}) {
+  const database = dependencies.database || new SqliteJobStore(config);
+  const openclawRunner = dependencies.openclawRunner || runOpenClawResearch;
+  const codexRunner = dependencies.codexRunner || runCodexResearch;
+  const callbackSender = dependencies.callbackSender || postCallback;
+  database.recoverInterrupted();
 
-  return postCallback(job.input.callbackUrl, payload, config);
-}
-
-export function createJobStore(config) {
-  const jobs = new Map();
-  const queue = [];
+  const queue = database.queuedIds();
+  const queuedSet = new Set(queue);
   let active = 0;
+  let closed = false;
 
   function snapshot(job) {
-    const queueIndex = queue.findIndex((queuedJob) => queuedJob.id === job.id);
+    if (!job) return null;
+    const queueIndex = queue.indexOf(job.id);
     const queuePosition = queueIndex >= 0 ? queueIndex + 1 : null;
-    const codexLogUrl = job.codex || job.jobDir ? `/jobs/${job.id}/codex-log` : null;
-    const statusMessage =
-      job.status === "queued"
-        ? `Waiting for a worker slot. Queue position: ${queuePosition || "unknown"}. Codex logs will appear after the job starts.`
-        : job.status === "running"
-          ? "Codex/Apollo enrichment is running."
-          : null;
-
     return {
       id: job.id,
       status: job.status,
-      statusMessage,
+      statusMessage:
+        job.status === "queued"
+          ? `Waiting for a worker slot. Queue position: ${queuePosition || "unknown"}.`
+          : job.status === "running"
+            ? `${config.research.engine === "codex" ? "Codex" : "OpenClaw"} decision-maker research is running.`
+            : null,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
-      completedAt: job.completedAt || null,
+      completedAt: job.completedAt,
       queuePosition,
       input: job.input,
-      result: job.result || null,
-      error: job.error || null,
-      jobDir: job.jobDir || null,
-      codex: job.codex || null,
-      codexLogUrl,
-      callback: job.callback || null
+      result: job.result,
+      error: job.error,
+      jobDir: job.jobDir,
+      worker: job.worker,
+      openclawLogUrl: job.jobDir ? `/jobs/${job.id}/research-log` : null,
+      callback: job.callback
     };
   }
 
-  function save(job, patch) {
-    Object.assign(job, patch, { updatedAt: new Date().toISOString() });
-    return job;
-  }
-
-  async function runJob(job) {
-    const jobDir = path.join(config.jobs.runsDir, job.id);
-    save(job, { status: "running", jobDir });
-    await mkdir(jobDir, { recursive: true });
-
-    try {
-      let codex = null;
-      let codexError = null;
+  async function deliverAndRecordCallback(job, payload) {
+    let callback = { status: "skipped_no_callback_url" };
+    if (job.input.callbackUrl) {
       try {
-        codex = await runCodexResearch(job.input, jobDir, config, (progress) => {
-          save(job, {
-            codex: {
-              ...(job.codex || {}),
-              ...progress
-            }
-          });
+        callback = await callbackSender(job.input.callbackUrl, payload, config, (delivery) => {
+          database.addCallbackDelivery(job.id, delivery);
         });
       } catch (error) {
-        codexError = error;
-        const lateOutputPath = job.codex?.outputPath;
-        if (lateOutputPath) {
-          try {
-            codex = {
-              status: "completed_late",
-              durationMs: Date.now() - Date.parse(job.codex.startedAt || job.createdAt),
-              research: await readCodexResearchOutput(lateOutputPath),
-              outputPath: lateOutputPath,
-              eventsPath: job.codex?.eventsPath,
-              stderrPath: job.codex?.stderrPath,
-              eventSummary: {
-                recoveredAfterError: error.message
-              }
-            };
-            codexError = null;
-          } catch {
-            // Keep the original Codex error when no valid final JSON exists.
-          }
-        }
+        callback = { status: "failed", error: error.message || "Callback delivery failed." };
       }
+    }
 
-      const research = codex?.research || {
-        companyName: job.input.companyName,
-        website: job.input.companyWebsite,
-        domain: domainFromWebsite(job.input.companyWebsite),
-        confidence: 0,
-        summary: "",
-        sourceUrls: [],
-        publicExecutives: []
-      };
-
-      const website = pickCompanyWebsite(job.input.companyWebsite, research.website, research.domain);
-      const domain = cleanDomain(research.domain) || domainFromWebsite(website);
-      const apollo = await searchApolloExecutives(
-        {
-          companyName: research.companyName || job.input.companyName,
-          domain,
-          limit: job.input.limit
-        },
-        config
-      );
-
-      const keyExecutives = mergeExecutives({
-        apolloExecutives: apollo.executives,
-        publicExecutives: research.publicExecutives,
-        limit: job.input.limit
-      });
-
-      const payload = {
-        jobId: job.id,
-        status: "completed",
-        completedAt: new Date().toISOString(),
-        clientName: job.input.clientName,
-        company: {
-          inputName: job.input.companyName,
-          resolvedName: research.companyName || job.input.companyName,
-          website,
-          domain,
-          summary: research.summary || "",
-          confidence: Number(research.confidence || 0),
-          sourceUrls: Array.isArray(research.sourceUrls) ? research.sourceUrls.filter(Boolean) : []
-        },
-        keyExecutives,
-        enrichment: {
-          codex: codex
-            ? {
-                status: "completed",
-                durationMs: codex.durationMs,
-                eventSummary: codex.eventSummary,
-                outputPath: codex.outputPath,
-                eventsPath: codex.eventsPath
-              }
-            : {
-                status: "failed",
-                error: codexError?.message || "Codex failed."
-              },
-          apollo: {
-            status: apollo.status,
-            total: apollo.total,
-            endpoint: apollo.endpoint || null,
-            enrichmentEndpoint: apollo.enrichmentEndpoint || null,
-            enrichedCount: apollo.enrichedCount || 0,
-            warnings: apollo.warnings || [],
-            error: apollo.error || null
-          }
-        },
-        metadata: job.input.metadata
-      };
-
-      const callback = await deliverCallback(job, payload, config);
-      save(job, {
-        status: "completed",
-        completedAt: payload.completedAt,
-        result: payload,
-        callback
-      });
-    } catch (error) {
-      const payload = {
-        jobId: job.id,
-        status: "failed",
-        completedAt: new Date().toISOString(),
-        clientName: job.input.clientName,
-        company: {
-          inputName: job.input.companyName,
-          website: job.input.companyWebsite
-        },
-        error: error.message,
-        metadata: job.input.metadata
-      };
-
-      const callback = await deliverCallback(job, payload, config);
-      save(job, {
-        status: "failed",
-        completedAt: payload.completedAt,
-        error: error.message,
-        result: payload,
-        callback
-      });
+    try {
+      database.setCallback(job.id, callback);
+    } catch {
+      // Callback persistence must never rewrite the already-terminal research status.
     }
   }
 
-  async function drain() {
+  async function runJob(id) {
+    const job = database.get(id);
+    if (!job || job.status !== "queued") return;
+    const jobDir = path.join(config.jobs.runsDir, id);
+    const engine = config.research.engine === "codex" ? "codex" : "openclaw";
+    const attemptNo = database.markRunning(id, engine, jobDir);
+    await mkdir(jobDir, { recursive: true });
+
+    try {
+      const runner = engine === "codex" ? codexRunner : openclawRunner;
+      const run = await runner(job.input, jobDir, config, (progress) => {
+        database.updateWorker(id, {
+          engine,
+          ...progress
+        });
+      });
+      const payload = buildTerminalResult({ jobId: id, input: job.input, research: run.research, run });
+      database.finishAttempt(id, attemptNo, "completed", {
+        durationMs: run.durationMs,
+        model: run.model,
+        toolsUsed: run.toolsUsed,
+        repaired: Boolean(run.repaired)
+      });
+      database.markTerminal(id, "completed", payload);
+      await deliverAndRecordCallback(job, payload);
+    } catch (error) {
+      const payload = {
+        jobId: id,
+        status: "failed",
+        error: error.message,
+        metadata: job.input.metadata
+      };
+      database.finishAttempt(id, attemptNo, "failed", null, error.message);
+      database.markTerminal(id, "failed", payload, error.message);
+      await deliverAndRecordCallback(job, payload);
+    }
+  }
+
+  function drain() {
+    if (closed) return;
     while (active < config.jobs.maxConcurrent && queue.length) {
-      const job = queue.shift();
+      const id = queue.shift();
+      queuedSet.delete(id);
       active += 1;
-      runJob(job)
+      runJob(id)
         .catch((error) => {
-          save(job, {
-            status: "failed",
-            completedAt: new Date().toISOString(),
-            error: error.message
-          });
+          const job = database.get(id);
+          if (job && !["completed", "failed"].includes(job.status)) {
+            const payload = { jobId: id, status: "failed", error: error.message, metadata: job.input.metadata };
+            database.markTerminal(id, "failed", payload, error.message);
+          }
         })
         .finally(() => {
           active -= 1;
@@ -214,52 +123,56 @@ export function createJobStore(config) {
     }
   }
 
-  function create(input) {
-    const job = {
-      id: crypto.randomUUID(),
-      status: "queued",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      input
-    };
-    jobs.set(job.id, job);
-    queue.push(job);
-    drain();
-    return snapshot(job);
+  function enqueue(id) {
+    if (!queuedSet.has(id)) {
+      queue.push(id);
+      queuedSet.add(id);
+    }
+    queueMicrotask(drain);
   }
 
-  function get(jobId) {
-    const job = jobs.get(jobId);
-    return job ? snapshot(job) : null;
+  function create(input, idempotencyKey = "") {
+    const created = database.create(input, idempotencyKey);
+    if (!created.reused && created.job.status === "queued") enqueue(created.job.id);
+    return { job: snapshot(created.job), reused: created.reused };
+  }
+
+  function get(id) {
+    return snapshot(database.get(id));
   }
 
   function list() {
-    return [...jobs.values()]
-      .map((job) => snapshot(job))
-      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    return database.list().map(snapshot);
   }
 
   function stats() {
     return {
+      ...database.stats(),
       active,
-      queued: queue.length,
+      inMemoryQueued: queue.length,
       maxConcurrent: config.jobs.maxConcurrent,
-      total: jobs.size
+      maxQueued: config.jobs.maxQueued
     };
   }
 
-  function purgeOldJobs() {
-    const cutoff = Date.now() - config.jobs.retentionMs;
-    for (const [id, job] of jobs.entries()) {
-      if (Date.parse(job.updatedAt) < cutoff) jobs.delete(id);
-    }
+  async function purgeOldJobs() {
+    const purged = database.purgeExpired(config.jobs.retentionMs);
+    const runsRoot = path.resolve(config.jobs.runsDir);
+    await Promise.all(
+      purged.jobs.map(({ id, jobDir }) => {
+        const target = path.resolve(jobDir || path.join(runsRoot, id));
+        if (!target.startsWith(`${runsRoot}${path.sep}`)) return Promise.resolve();
+        return rm(target, { recursive: true, force: true });
+      })
+    );
+    return purged.count;
   }
 
-  return {
-    create,
-    get,
-    list,
-    stats,
-    purgeOldJobs
-  };
+  function close() {
+    closed = true;
+    database.close();
+  }
+
+  queueMicrotask(drain);
+  return { create, get, list, stats, purgeOldJobs, close, database };
 }

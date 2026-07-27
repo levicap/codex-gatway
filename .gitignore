@@ -3,6 +3,8 @@ node_modules/
 .agents/
 codex-workdir/
 job-runs/
+data/
 npm-debug.log*
 server.out.log
 server.err.log
+openclaw/workspace-lead-research/openclaw-workspace-state.json

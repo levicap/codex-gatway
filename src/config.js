@@ -33,19 +33,18 @@ function resolveFromRoot(value, fallback) {
 export const config = {
   projectRoot,
   port: numberEnv("PORT", 3000),
+  host: stringEnv("HOST", "127.0.0.1"),
   nodeEnv: stringEnv("NODE_ENV", "development"),
-  webhookAuthToken: stringEnv("WEBHOOK_AUTH_TOKEN"),
+  researchApiKey: stringEnv("RESEARCH_API_KEY", stringEnv("WEBHOOK_AUTH_TOKEN")),
   callbackSecret: stringEnv("CALLBACK_SECRET"),
-
-  apollo: {
-    apiKey: stringEnv("APOLLO_API_KEY"),
-    baseUrl: stringEnv("APOLLO_BASE_URL", "https://api.apollo.io/api/v1").replace(/\/+$/, ""),
-    peopleSearchPath: stringEnv("APOLLO_PEOPLE_SEARCH_PATH", "/mixed_people/api_search"),
-    peopleEnrichmentPath: stringEnv("APOLLO_PEOPLE_ENRICHMENT_PATH", "/people/match"),
-    includeEmails: booleanEnv("APOLLO_INCLUDE_EMAILS", false),
-    enrichPeople: booleanEnv("APOLLO_ENRICH_PEOPLE", true),
-    enrichLimit: Math.max(0, numberEnv("APOLLO_ENRICH_LIMIT", 10)),
-    timeoutMs: numberEnv("APOLLO_TIMEOUT_MS", 30000)
+  callbackAllowedHosts: stringEnv("CALLBACK_ALLOWED_HOSTS")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+  callbackTimeoutMs: numberEnv("CALLBACK_TIMEOUT_MS", 15000),
+  rateLimit: {
+    windowMs: Math.max(1000, numberEnv("RATE_LIMIT_WINDOW_MS", 60000)),
+    max: Math.max(1, numberEnv("RATE_LIMIT_MAX", 30))
   },
 
   codex: {
@@ -54,18 +53,31 @@ export const config = {
     profile: stringEnv("CODEX_PROFILE"),
     sandbox: stringEnv("CODEX_SANDBOX", "read-only"),
     liveSearch: booleanEnv("CODEX_LIVE_SEARCH", true),
-    visibleTerminal: booleanEnv("CODEX_VISIBLE_TERMINAL", false),
-    visibleTerminalHold: booleanEnv("CODEX_VISIBLE_TERMINAL_HOLD", true),
-    enableApolloMcp: booleanEnv("CODEX_ENABLE_APOLLO_MCP", true),
-    apolloMcpRequired: booleanEnv("CODEX_APOLLO_MCP_REQUIRED", true),
     timeoutMs: numberEnv("CODEX_TIMEOUT_MS", 900000),
     workdir: resolveFromRoot(stringEnv("CODEX_WORKDIR"), "codex-workdir"),
-    outputSchemaPath: path.resolve(projectRoot, "schemas", "company-research.schema.json")
+    outputSchemaPath: path.resolve(projectRoot, "schemas", "decision-maker-research.schema.json")
+  },
+
+  research: {
+    engine: stringEnv("RESEARCH_ENGINE", "openclaw").toLowerCase(),
+    model: stringEnv("RESEARCH_MODEL", "openai/gpt-5.6-terra")
+  },
+
+  openclaw: {
+    bin: stringEnv("OPENCLAW_BIN", "openclaw"),
+    agent: stringEnv("OPENCLAW_AGENT", "lead-research"),
+    thinking: stringEnv("OPENCLAW_THINKING", "medium"),
+    timeoutSeconds: Math.max(1, numberEnv("OPENCLAW_TIMEOUT_SECONDS", 600)),
+    killGraceMs: Math.max(1000, numberEnv("OPENCLAW_KILL_GRACE_MS", 60000)),
+    maxOutputBytes: Math.max(65536, numberEnv("OPENCLAW_MAX_OUTPUT_BYTES", 10 * 1024 * 1024))
   },
 
   jobs: {
     runsDir: path.resolve(projectRoot, "job-runs"),
+    databasePath: resolveFromRoot(stringEnv("JOBS_DATABASE_PATH"), "data/jobs.sqlite"),
     maxConcurrent: Math.max(1, numberEnv("MAX_CONCURRENT_JOBS", 2)),
+    maxQueued: Math.max(1, numberEnv("MAX_QUEUED_JOBS", 100)),
+    maxAttempts: 2,
     retentionMs: Math.max(60000, numberEnv("JOB_RETENTION_MS", 86400000))
   }
 };

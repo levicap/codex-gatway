@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "resolvedCompanyName",
+    "website",
+    "domain",
+    "confidence",
+    "sourceUrls",
+    "decisionMakers",
+    "warnings"
+  ],
+  "properties": {
+    "resolvedCompanyName": {
+      "type": "string"
+    },
+    "website": {
+      "type": "string"
+    },
+    "domain": {
+      "type": "string"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "sourceUrls": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "decisionMakers": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "title",
+          "company",
+          "linkedinUrl",
+          "confidence",
+          "relevanceReason",
+          "sourceUrls",
+          "linkedinEvidenceUrls"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          },
+          "company": {
+            "type": "string",
+            "minLength": 1
+          },
+          "linkedinUrl": {
+            "type": "string",
+            "minLength": 1
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "relevanceReason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceUrls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "linkedinEvidenceUrls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
