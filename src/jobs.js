@@ -111,7 +111,8 @@ export function createJobStore(config) {
         {
           companyName: research.companyName || job.input.companyName,
           domain,
-          limit: job.input.limit
+          limit: job.input.limit,
+          metadata: job.input.metadata
         },
         config
       );
@@ -119,7 +120,8 @@ export function createJobStore(config) {
       let keyExecutives = mergeExecutives({
         apolloExecutives: apollo.executives,
         publicExecutives: research.publicExecutives,
-        limit: job.input.limit
+        limit: job.input.limit,
+        metadata: job.input.metadata
       });
       const apolloSupplement = await supplementExecutivesWithApollo(
         keyExecutives,
@@ -166,6 +168,7 @@ export function createJobStore(config) {
             enrichmentEndpoint: apollo.enrichmentEndpoint || null,
             enrichedCount: apollo.enrichedCount || 0,
             warnings: apollo.warnings || [],
+            leadContext: apollo.leadContext || null,
             supplementedCount: apolloSupplement.supplementedCount,
             supplementWarnings: apolloSupplement.warnings,
             error: apollo.error || null

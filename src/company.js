@@ -1,3 +1,5 @@
+import { extractLeadTitles, titleRelevance } from "./leadContext.js";
+
 export const DEFAULT_EXECUTIVE_TITLES = [
   "Chief Executive Officer",
   "CEO",
@@ -90,15 +92,16 @@ function hasFullName(name) {
     .filter(Boolean).length >= 2;
 }
 
-function executiveScore(executive) {
+function executiveScore(executive, targetTitles = []) {
   const source = String(executive.source || "");
   const email = cleanEmail(executive.email);
+  const relevanceBonus = targetTitles.length ? titleRelevance(executive.title, targetTitles) * 1200 : 0;
   const sourceBonus = source.includes("codex_public") ? 25 : 0;
   const emailBonus = email ? 125 : 0;
   const linkedinBonus = cleanString(executive.linkedinUrl) ? 3 : 0;
   const nameBonus = hasFullName(executive.name) ? 2 : 0;
   const apolloOnlyNoEmailPenalty = !source.includes("codex_public") && !email ? -150 : 0;
-  return executiveRank(executive.title) * 100 + sourceBonus + emailBonus + linkedinBonus + nameBonus + apolloOnlyNoEmailPenalty;
+  return executiveRank(executive.title) * 100 + relevanceBonus + sourceBonus + emailBonus + linkedinBonus + nameBonus + apolloOnlyNoEmailPenalty;
 }
 
 function cleanEmail(value) {
@@ -111,8 +114,9 @@ function cleanString(value) {
   return String(value || "").trim();
 }
 
-export function mergeExecutives({ apolloExecutives = [], publicExecutives = [], limit = 10 }) {
+export function mergeExecutives({ apolloExecutives = [], publicExecutives = [], limit = 10, metadata = {} }) {
   const merged = new Map();
+  const targetTitles = extractLeadTitles(metadata);
 
   for (const executive of publicExecutives) {
     const name = String(executive.name || "").trim();
@@ -174,6 +178,6 @@ export function mergeExecutives({ apolloExecutives = [], publicExecutives = [], 
   }
 
   return [...merged.values()]
-    .sort((a, b) => executiveScore(b) - executiveScore(a) || a.name.localeCompare(b.name))
+    .sort((a, b) => executiveScore(b, targetTitles) - executiveScore(a, targetTitles) || a.name.localeCompare(b.name))
     .slice(0, limit);
 }

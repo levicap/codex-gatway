@@ -1,4 +1,5 @@
 import { DEFAULT_EXECUTIVE_TITLES, cleanDomain } from "./company.js";
+import { buildLeadContext, extractLeadTitles } from "./leadContext.js";
 
 function firstNonEmpty(...values) {
   return values.find((value) => typeof value === "string" && value.trim())?.trim() || "";
@@ -72,6 +73,19 @@ export function pathJoin(baseUrl, endpointPath) {
   return `${baseUrl}${path}`;
 }
 
+function uniqueTitles(values) {
+  const seen = new Set();
+  const result = [];
+  for (const value of values) {
+    const title = String(value || "").trim();
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    result.push(title);
+  }
+  return result;
+}
+
 function mergePerson(base, enriched) {
   if (!enriched) return base;
   return {
@@ -127,7 +141,7 @@ export async function enrichApolloPerson(person, { domain, companyName }, config
   return normalizeApolloPerson(enrichedPerson, config.apollo.includeEmails);
 }
 
-export async function searchApolloExecutives({ companyName, domain, limit }, config) {
+export async function searchApolloExecutives({ companyName, domain, limit, metadata = {}, targetTitles = [] }, config) {
   if (!config.apollo.apiKey) {
     return {
       status: "skipped_missing_api_key",
@@ -150,14 +164,22 @@ export async function searchApolloExecutives({ companyName, domain, limit }, con
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.apollo.timeoutMs);
   const url = pathJoin(config.apollo.baseUrl, config.apollo.peopleSearchPath);
+  const leadContext = buildLeadContext(metadata, targetTitles);
+  const leadTitles = extractLeadTitles(metadata, targetTitles);
+  const personTitles = leadTitles.length
+    ? uniqueTitles([...leadTitles, ...DEFAULT_EXECUTIVE_TITLES])
+    : DEFAULT_EXECUTIVE_TITLES;
 
   const body = {
     page: 1,
     per_page: Math.min(Math.max(limit * 3, 10), 50),
-    person_titles: DEFAULT_EXECUTIVE_TITLES,
-    person_seniorities: ["owner", "founder", "c_suite", "vp", "head"],
-    include_similar_titles: false
+    person_titles: personTitles,
+    include_similar_titles: Boolean(leadTitles.length)
   };
+
+  if (!leadTitles.length) {
+    body.person_seniorities = ["owner", "founder", "c_suite", "vp", "head"];
+  }
 
   if (clean) {
     body.q_organization_domains_list = [clean];
@@ -228,7 +250,8 @@ export async function searchApolloExecutives({ companyName, domain, limit }, con
       endpoint: url,
       enrichmentEndpoint: config.apollo.enrichPeople ? pathJoin(config.apollo.baseUrl, config.apollo.peopleEnrichmentPath) : null,
       enrichedCount,
-      warnings
+      warnings,
+      leadContext
     };
   } catch (error) {
     return {

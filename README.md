@@ -79,13 +79,16 @@ Equivalent JSON body:
   "companyWebsite": "https://openai.com",
   "limit": 10,
   "metadata": {
-    "crmRecordId": "abc123"
+    "crmRecordId": "abc123",
+    "jobTitle": "VP Sales",
+    "jobDescription": "Find the best sales or revenue decision maker for an enterprise CRM integration.",
+    "location": "San Francisco, CA"
   }
 }
 ```
 
 `companyWebsite` is optional. If missing, Codex is asked to find the official website through web research.
-`metadata` is passed to Codex as untrusted caller context and is also returned unchanged in the final result.
+`metadata` is passed to Codex as untrusted caller context, used by Apollo search for target titles when possible, and returned unchanged in the final result.
 
 Response:
 

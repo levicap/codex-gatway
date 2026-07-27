@@ -7,6 +7,7 @@ import {
   normalizeWebsite,
   pickCompanyWebsite
 } from "../src/company.js";
+import { extractLeadTitles } from "../src/leadContext.js";
 import { validateEnrichmentRequest } from "../src/validation.js";
 
 test("normalizes websites and domains", () => {
@@ -85,6 +86,46 @@ test("rejects out-of-range limit without defaulting it", () => {
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join(" "), /limit must be an integer between 1 and 25/);
+});
+
+test("extracts lead titles from metadata", () => {
+  assert.deepEqual(
+    extractLeadTitles({
+      jobTitle: "VP Sales",
+      target: {
+        roles: ["Head of Revenue", "Sales Director"]
+      }
+    }),
+    ["VP Sales", "Head of Revenue", "Sales Director"]
+  );
+});
+
+test("metadata target title can prioritize lead-relevant people", () => {
+  const merged = mergeExecutives({
+    limit: 2,
+    metadata: {
+      jobTitle: "Marketing Manager"
+    },
+    publicExecutives: [],
+    apolloExecutives: [
+      {
+        name: "Casey CEO",
+        title: "Chief Executive Officer",
+        email: "casey@example.com",
+        emailType: "apollo_work",
+        confidence: 0.85
+      },
+      {
+        name: "Morgan Marketer",
+        title: "Marketing Manager",
+        email: "morgan@example.com",
+        emailType: "apollo_work",
+        confidence: 0.85
+      }
+    ]
+  });
+
+  assert.equal(merged[0].name, "Morgan Marketer");
 });
 
 test("merges public and apollo executives by name and ranks senior titles first", () => {

@@ -25,6 +25,13 @@ const tools = [
           minimum: 1,
           maximum: 25,
           default: 10
+        },
+        targetTitles: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional target job titles or roles from client metadata, for example VP Sales or Head of Marketing."
         }
       }
     }
@@ -113,7 +120,8 @@ async function callTool(name, args = {}) {
       {
         companyName: String(args.companyName || ""),
         domain: cleanDomain(args.domain || ""),
-        limit: Number(args.limit || 10)
+        limit: Number(args.limit || 10),
+        targetTitles: Array.isArray(args.targetTitles) ? args.targetTitles.map(String) : []
       },
       config
     );
