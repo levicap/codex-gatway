@@ -50,6 +50,7 @@ app.get("/health", (_req, res) => {
     service: "codex-executive-webhook",
     codex: {
       bin: config.codex.bin,
+      model: config.codex.model,
       sandbox: config.codex.sandbox,
       liveSearch: config.codex.liveSearch,
       apolloMcpEnabled: config.codex.enableApolloMcp,

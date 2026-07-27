@@ -14,6 +14,7 @@ Configure `.env`:
 
 - `APOLLO_API_KEY`: Apollo.io API key for people search.
 - `CODEX_BIN`: Codex CLI binary, defaults to `codex`.
+- `CODEX_MODEL=gpt-5.3-codex-spark`: runs Codex jobs on GPT-5.3-Codex-Spark when your Codex account has access.
 - `CODEX_LIVE_SEARCH=true`: passes `--search` to Codex so the CLI can use live web search.
 - `CODEX_SANDBOX=read-only`: default because this worker only needs research output.
 - `CODEX_ENABLE_APOLLO_MCP=true`: exposes Apollo to Codex as local MCP tools during `codex exec`.

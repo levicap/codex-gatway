@@ -50,7 +50,7 @@ export const config = {
 
   codex: {
     bin: stringEnv("CODEX_BIN", "codex"),
-    model: stringEnv("CODEX_MODEL"),
+    model: stringEnv("CODEX_MODEL", "gpt-5.3-codex-spark"),
     profile: stringEnv("CODEX_PROFILE"),
     sandbox: stringEnv("CODEX_SANDBOX", "read-only"),
     liveSearch: booleanEnv("CODEX_LIVE_SEARCH", true),
